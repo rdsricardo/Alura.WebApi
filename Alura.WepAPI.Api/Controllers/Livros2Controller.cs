@@ -4,38 +4,45 @@ using Alura.WepAPI.Api.Modelos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
-using System.Collections.Generic;
 using System.Linq;
 
-namespace Alura.WebAPI.Api.Controllers
+namespace Alura.WepAPI.Api.Controllers
 {
     [Authorize]
-    [ApiVersion("1.0")]
-    [ApiExplorerSettings(GroupName = "v1")]
-    [Route("api/v{version:apiVersion}/[controller]")]
+    [ApiVersion("2.0")]
+    [ApiExplorerSettings(GroupName = "v2")]
+    [Route("api/v{version:apiVersion}/Livros")]
     [ApiController]
-    public class LivrosController : ControllerBase
+    public class Livros2Controller : ControllerBase
     {
         private readonly IRepository<Livro> _repo;
 
-        public LivrosController(IRepository<Livro> repository)
+        public Livros2Controller(IRepository<Livro> repository)
         {
             _repo = repository;
         }
 
         [HttpGet]
         [SwaggerOperation(
-            Summary = "Recupera todos os livros cadastrados.",
+            Summary = "Recupera todos os livros paginados e com opção de filtro e ordem.",
             Tags = new string[] { "Livros" }
         )]
-        [Produces("application/json", "application/xml", "application/csv")]
-        [ProducesResponseType(statusCode: 200, Type = typeof(List<LivroApi>))]
+        [Produces("application/json")]
+        [ProducesResponseType(statusCode: 200, Type = typeof(LivroPaginado))]
         [ProducesResponseType(statusCode: 500, Type = typeof(ErrorResponse))]
         //[ProducesResponseType(statusCode: 401)]
-        public IActionResult RecuperarTodos()
+        public IActionResult RecuperarTodos([FromQuery] [SwaggerParameter("Opções de filtragem")] LivroFiltro filtro,
+            [FromQuery] [SwaggerParameter("Opções de ordenação")] LivroOrdem ordem,
+            [FromQuery] [SwaggerParameter("Opções de paginação")] LivroPaginacao paginacao)
         {
-            var lista = _repo.All.Select(l => l.ToApi()).ToList();
-            return Ok(lista);
+            var livroPaginado = _repo
+                .All
+                .AplicarFiltro(filtro)
+                .AplicarOrdem(ordem)
+                .Select(l => l.ToApi())
+                .ToLivroPaginado(paginacao);
+
+            return Ok(livroPaginado);
         }
 
         [HttpGet]
@@ -47,7 +54,7 @@ namespace Alura.WebAPI.Api.Controllers
             if (model == null)
                 return NotFound(); //404
 
-            return Ok(model.ToApi());
+            return Ok(model);
         }
 
         [HttpGet]
@@ -76,7 +83,7 @@ namespace Alura.WebAPI.Api.Controllers
                 return Created(uri, livro); //201
             }
 
-            return BadRequest(); //400
+            return BadRequest(ErrorResponse.FromModelState(ModelState)); //400
         }
 
         [HttpDelete]

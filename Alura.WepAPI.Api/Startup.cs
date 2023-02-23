@@ -1,13 +1,20 @@
 using Alura.ListaLeitura.Modelos;
 using Alura.ListaLeitura.Persistencia;
 using Alura.WebAPI.Api.Formatters;
+using Alura.WepAPI.Api.Filters;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Versioning;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using Unchase.Swashbuckle.AspNetCore.Extensions.Extensions;
+using Unchase.Swashbuckle.AspNetCore.Extensions.Filters;
 
 namespace Alura.WepAPI.Api
 {
@@ -33,7 +40,13 @@ namespace Alura.WepAPI.Api
             services.AddMvc(opt =>
             {
                 opt.OutputFormatters.Add(new LivroCsvFormatter());
+                opt.Filters.Add(typeof(ErrorResponseExceptionFilter));
             }).AddXmlSerializerFormatters();
+
+            services.Configure<ApiBehaviorOptions>(options =>
+            {
+                options.SuppressModelStateInvalidFilter = true;
+            });
 
             services.AddAuthentication(opt =>
             {
@@ -53,6 +66,66 @@ namespace Alura.WepAPI.Api
                     ValidAudience = "Postman",
                 };
             });
+
+            //Microsoft.AspNetCore.Mvc.Versioning
+            //Adiciona versionamento de API (Rota, Query String, Header, etc)
+            /*
+             * Por rota não é compatível com outro
+             * Query String e Header podem ser usados juntos
+             * Por padrão (sem rota), já aceita por query string
+             */
+
+
+            //services.AddApiVersioning();
+
+            //services.AddApiVersioning(opt => 
+            //opt.ApiVersionReader = new HeaderApiVersionReader("api-version"));
+
+            //services.AddApiVersioning(opt => 
+            //    opt.ApiVersionReader = ApiVersionReader.Combine(  
+            //        new HeaderApiVersionReader("api-version"),
+            //        new QueryStringApiVersionReader("api-version")
+            //        )
+            //    );
+
+            services.AddApiVersioning();
+
+            services.AddSwaggerGen(c =>
+            {
+                c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo { Title = "Documentação API Livros V1.0", Description = "Documentação da API", Version = "1.0" });
+                c.SwaggerDoc("v2", new Microsoft.OpenApi.Models.OpenApiInfo { Title = "Documentação API Livros V2.0", Description = "Documentação da API", Version = "1.0" });
+                c.EnableAnnotations();
+
+                var openApiSecurityScheme = new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                {
+                    Name = "Authorization",
+                    In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+                    Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+                    Description = "Autenticação Bearer via JWT"
+
+                };
+
+                c.AddSecurityDefinition("Bearer", openApiSecurityScheme);
+
+                var openApiSecurityRequirement = new Microsoft.OpenApi.Models.OpenApiSecurityRequirement();
+                openApiSecurityRequirement.Add(openApiSecurityScheme, new List<string>());
+
+                c.AddSecurityRequirement(openApiSecurityRequirement);
+
+                c.AddEnumsWithValuesFixFilters(o =>
+                {
+                    o.ApplySchemaFilter = true;
+                });
+                //c.SchemaFilter<AutoRestSchemaFilter>(); /* Não funcionou */
+
+                c.OperationFilter<AuthResponsesOperationFilter>();
+
+                c.DocumentFilter<TagDescriptionsDocumentFilter>();
+
+                c.DescribeAllParametersInCamelCase();
+
+                /* c.ResolveConflictingActions(apiDescriptions => apiDescriptions.First()); */
+            });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -70,6 +143,14 @@ namespace Alura.WepAPI.Api
             app.UseAuthentication();
 
             app.UseMvc();
+
+            app.UseSwagger();
+            app.UseSwaggerUI(s =>
+            {
+                s.SwaggerEndpoint("/swagger/v1/swagger.json", "v1");
+                s.SwaggerEndpoint("/swagger/v2/swagger.json", "v2");
+            });
+            
         }
     }
 }
